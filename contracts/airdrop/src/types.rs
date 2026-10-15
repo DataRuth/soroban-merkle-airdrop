@@ -1,7 +1,6 @@
 //! Data types and storage keys for the Merkle airdrop contract.
 
-use soroban_sdk::{contracttype, contracterror, Address};
-
+use soroban_sdk::{contracterror, contracttype, Address};
 
 /// Persistent storage keys.
 #[contracttype]
@@ -42,4 +41,20 @@ pub enum AirdropError {
     ZeroAmount = 6,
     /// `reclaim()` called before the expiration timestamp has been reached.
     NotYetExpired = 7,
+    /// `initialize()` called with an expiration timestamp that is already in
+    /// the past (i.e. `expiration <= env.ledger().timestamp()`).
+    ExpirationInPast = 8,
+}
+
+/// A single recipient's allocation inside a batch claim.
+///
+/// Supplied to `AirdropContract::batch_claim` as one vector of entries plus a
+/// parallel vector of Merkle proofs, so `proofs[i]` belongs to `entries[i]`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AirdropEntry {
+    /// Address receiving the tokens; must authorise the batch claim.
+    pub claimant: Address,
+    /// Tokens allocated to this claimant in the distribution tree.
+    pub amount: i128,
 }

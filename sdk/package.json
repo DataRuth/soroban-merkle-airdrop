@@ -13,7 +13,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "docs": "typedoc"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "13.1.0"
@@ -21,7 +22,9 @@
   "devDependencies": {
     "@types/node": "20.14.0",
     "typescript": "5.4.5",
+    "typedoc": "0.26.11",
     "vitest": "1.6.0",
+    "fast-check": "3.22.0",
     "@typescript-eslint/parser": "7.13.0",
     "@typescript-eslint/eslint-plugin": "7.13.0"
   }

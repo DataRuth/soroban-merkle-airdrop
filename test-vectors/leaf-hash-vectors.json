@@ -1,0 +1,68 @@
+[
+  {
+    "_comment": "Vector 0 — original cross-language vector from test.rs; G-address, typical amount",
+    "address": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+    "amount": "1000000",
+    "expected_leaf_hex": "7c7175b951be4c0bc42331708840f397c148788c8911a7cf1b0622f288b3a6ce"
+  },
+  {
+    "_comment": "Vector 1 — G-address, amount=1 (minimum positive i128)",
+    "address": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN",
+    "amount": "1",
+    "expected_leaf_hex": "729dfc0ed92f98894c84a5e33d1cd525dfe6c2fb56970166c179caa1a0ace8be"
+  },
+  {
+    "_comment": "Vector 2 — G-address, i128::MAX = 2^127 - 1 (high-word fully set, low-word fully set)",
+    "address": "GAYOLLLUIZE4DZMBB2ZBKGBUBZLIOYU6XFLW37GBP2VZD3ABNXCW4BVA",
+    "amount": "170141183460469231731687303715884105727",
+    "expected_leaf_hex": "8c0e8be1b1b05ad50fb6aac2ccc7b8bb2202848c6762d463fab7a9df49a51b2d"
+  },
+  {
+    "_comment": "Vector 3 — G-address, amount=2^64 (high 64-bit word set to 1, low=0; tests carry across word boundary)",
+    "address": "GCEZWKCA5VLDNRLN3RPRJMRZOX3Z6G5CHCGPFWEPDFWPTTG6CQRPMSZ",
+    "amount": "18446744073709551616",
+    "expected_leaf_hex": "64c521948c96e91ece94c9e6df46d76f68f06ac174368567bd56a5711ede47c7"
+  },
+  {
+    "_comment": "Vector 4 — G-address, small amount 500",
+    "address": "GC2XDH63N3GGWP7QH36PFPTSEMC77HNHHCFK4MT5P7UY2LVJRLXIYWW",
+    "amount": "500",
+    "expected_leaf_hex": "062193ba78559d4c83485c318439eb85ee0546ed60e7222d9eeb59999d1c01b6"
+  },
+  {
+    "_comment": "Vector 5 — G-address, billion-scale amount",
+    "address": "GBVZJYDVQ4WY7GQFKNGJQZ3HVFMR3PNJYMLFKPQWIGZPHNVBNKMKFXM",
+    "amount": "1000000000",
+    "expected_leaf_hex": "90c88226a42d1a07042dbb958ad836aef56503da497e403479454ec27c7bf42c"
+  },
+  {
+    "_comment": "Vector 6 — G-address, amount=250",
+    "address": "GDXF5SHEF3XNZE3EF3VIJTNS3FMTMHQSXMLLWFUJL7YFJPMIHYF5KAW",
+    "amount": "250",
+    "expected_leaf_hex": "9791b839a4f7e7a1038615e3c4fd4f909c545fb0cfe3c775d32c93ecfbf6a39e"
+  },
+  {
+    "_comment": "Vector 7 — C-address (Soroban contract), amount=42; tests contract address strkey hashing",
+    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
+    "amount": "42",
+    "expected_leaf_hex": "1063f9acc0ac0f081bb15b423e9f4f7a296db4224a78518bb805b74b182f0cd3"
+  },
+  {
+    "_comment": "Vector 8 — C-address, large amount near 10^10",
+    "address": "CBEZIXBSAPZ5YBH2WQHLISNOQDXVZKZQRPX3MF5GRCJJMH3SBYXEWYJ",
+    "amount": "9999999999",
+    "expected_leaf_hex": "aa8ef6c4a5acbdfe129cd761405800beceb5f19558ac5fb5d830096ea903625b"
+  },
+  {
+    "_comment": "Vector 9 — G-address, amount=5*2^64 (high 64-bit word=5, low=0; exercises high-word encoding path)",
+    "address": "GDMGJ4JCWZL6FJDAKBLH3UQ7GBWJMPBWLGVP4G5UYXZ3AVZDLJ5L3AO",
+    "amount": "92233720368547758080",
+    "expected_leaf_hex": "35064d6f511eeac11424e759b1950502faff0424beec1b215116cea2fe3d9bd3"
+  },
+  {
+    "_comment": "Vector 10 — G-address (same as vector 0, different amount), amount near i128::MAX/2 (high-word=2^63/2)",
+    "address": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+    "amount": "85070591730234615865843651857942052864",
+    "expected_leaf_hex": "fa59e6dadfb3000304e022030f274458cf92cc524cbe45cbe710fc480e29f9c8"
+  }
+]
