@@ -104,7 +104,7 @@ fn test_initialize_and_query() {
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     assert_eq!(client.merkle_root(), Some(root.clone()));
     assert_eq!(client.is_active(), true);
@@ -124,7 +124,7 @@ fn test_claim_success() {
     let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     assert_eq!(TokenClient::new(&env, &token).balance(&claimant), 0);
 
@@ -143,7 +143,7 @@ fn test_double_claim_fails() {
     let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
     client.claim(&claimant, &1000, &proof);
 
     let result = client.try_claim(&claimant, &1000, &proof);
@@ -160,7 +160,7 @@ fn test_invalid_proof_fails() {
     let (root, _, proof1) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &other, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Submit proof for `other` but claim as `claimant`
     let result = client.try_claim(&claimant, &500, &proof1);
@@ -176,7 +176,7 @@ fn test_wrong_amount_fails() {
     let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Correct proof, wrong amount
     let result = client.try_claim(&claimant, &9999, &proof);
@@ -192,7 +192,7 @@ fn test_pause_and_unpause() {
     let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // ── Pause ────────────────────────────────────────────────────────────────
     client.set_active(&false);
@@ -292,7 +292,7 @@ fn test_reclaim_unclaimed_tokens() {
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Advance ledger timestamp past expiration.
     env.ledger().set_timestamp(DEFAULT_EXPIRATION);
@@ -312,7 +312,7 @@ fn test_reclaim_before_expiration_fails() {
 
     mint(&env, &token, &admin, &admin, 1500);
     // Ledger timestamp is 0 by default; expiration is 1000.
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Attempt reclaim before expiration (timestamp 0 < expiration 1000).
     let result = client.try_reclaim();
@@ -336,7 +336,7 @@ fn test_claim_succeeds_after_expiration_before_reclaim() {
     let (root, proof, _) = build_two_leaf_tree(&env, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Advance ledger to exactly the expiration timestamp.
     env.ledger().set_timestamp(DEFAULT_EXPIRATION);
@@ -366,7 +366,7 @@ fn test_claim_panics_after_reclaim_empties_contract() {
     let (root, proof, _) = build_two_leaf_tree(&env, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Admin reclaims all tokens after expiry.
     env.ledger().set_timestamp(DEFAULT_EXPIRATION);
@@ -389,9 +389,9 @@ fn test_double_initialize_fails() {
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 3000);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
-    let result = client.try_initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    let result = client.try_initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
     assert_eq!(result, Err(Ok(AirdropError::AlreadyInitialized)));
 }
 
@@ -457,7 +457,7 @@ fn test_initialize_with_expiration_one_second_in_future_succeeds() {
     let future_expiration: u64 = 101;
 
     // Must succeed without error.
-    client.initialize(&admin, &token, &root, &1500, &future_expiration);
+    client.initialize(&admin, &token, &root, &1500, &future_expiration, &None, &None);
     assert_eq!(client.expiration(), Some(future_expiration));
 }
 
@@ -470,7 +470,7 @@ fn test_zero_amount_claim_fails() {
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     let empty_proof: Vec<BytesN<32>> = Vec::new(&env);
     let result = client.try_claim(&claimant, &0, &empty_proof);
@@ -495,7 +495,7 @@ fn test_query_merkle_root_extends_ttl() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     let ttl_before = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
     // Simulate many ledgers passing without a claim — TTL would drop.
@@ -521,7 +521,7 @@ fn test_query_is_claimed_extends_ttl() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Shrinking the TTL also has to happen inside the contract's context.
     env.as_contract(&contract_id, || env.storage().instance().extend_ttl(1, 1));
@@ -542,7 +542,7 @@ fn test_query_is_active_extends_ttl() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Shrinking the TTL also has to happen inside the contract's context.
     env.as_contract(&contract_id, || env.storage().instance().extend_ttl(1, 1));
@@ -563,7 +563,7 @@ fn test_query_token_extends_ttl() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Shrinking the TTL also has to happen inside the contract's context.
     env.as_contract(&contract_id, || env.storage().instance().extend_ttl(1, 1));
@@ -584,7 +584,7 @@ fn test_query_admin_extends_ttl() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Shrinking the TTL also has to happen inside the contract's context.
     env.as_contract(&contract_id, || env.storage().instance().extend_ttl(1, 1));
@@ -605,7 +605,7 @@ fn test_query_total_deposited_extends_ttl() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Shrinking the TTL also has to happen inside the contract's context.
     env.as_contract(&contract_id, || env.storage().instance().extend_ttl(1, 1));
@@ -626,7 +626,7 @@ fn test_query_expiration_extends_ttl() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Shrinking the TTL also has to happen inside the contract's context.
     env.as_contract(&contract_id, || env.storage().instance().extend_ttl(1, 1));
@@ -650,7 +650,7 @@ fn test_negative_total_amount_fails() {
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
 
     // Do NOT mint — the rejection should happen before the transfer.
-    let result = client.try_initialize(&admin, &token, &root, &-1, &DEFAULT_EXPIRATION);
+    let result = client.try_initialize(&admin, &token, &root, &-1, &DEFAULT_EXPIRATION, &None, &None);
     assert_eq!(result, Err(Ok(AirdropError::ZeroAmount)));
 }
 
@@ -663,7 +663,7 @@ fn test_negative_claim_amount_fails() {
     let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     let result = client.try_claim(&claimant, &-1, &proof);
     assert_eq!(result, Err(Ok(AirdropError::ZeroAmount)));
@@ -682,7 +682,7 @@ fn test_non_admin_set_active_fails() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Override mock_all_auths: only authorize non_admin, not the real admin.
     // The contract checks `admin.require_auth()` where admin is the stored address,
@@ -713,7 +713,7 @@ fn test_non_admin_reclaim_fails() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Advance past expiration so the time-gate is not the failure point.
     env.ledger().set_timestamp(DEFAULT_EXPIRATION);
@@ -920,7 +920,7 @@ fn test_transfer_admin_success() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     client.transfer_admin(&new_admin);
 
@@ -949,7 +949,7 @@ fn test_non_admin_transfer_admin_fails() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Authorize non_admin instead of the real admin — must panic.
     env.set_auths(&[MockAuth {
@@ -975,7 +975,7 @@ fn test_new_admin_can_set_active() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     client.transfer_admin(&new_admin);
 
@@ -1009,7 +1009,7 @@ fn test_restore_extends_ttl() {
 
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Simulate near-archival. The instance TTL is counted down by the ledger
     // sequence, so moving the ledger forward is what actually shortens it —
@@ -1051,7 +1051,7 @@ fn test_restore_requires_no_auth() {
     let claimant = Address::generate(&env);
     let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token_id, &admin, &admin, 1500);
-    client.initialize(&admin, &token_id, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token_id, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
     // Clear mock auths so subsequent calls must be auth-free.
     env.set_auths(&[]);
 
@@ -1208,8 +1208,8 @@ fn test_domain_separation_proof_invalid_across_contracts() {
     // Initialise both contracts with the SAME root so the cross-contract
     // attack surface is maximally exposed.
     mint(&env, &token, &admin, &admin, 3000);
-    client_a.initialize(&admin, &token, &root_a, &1500, &DEFAULT_EXPIRATION);
-    client_b.initialize(&admin, &token, &root_a, &1500, &DEFAULT_EXPIRATION);
+    client_a.initialize(&admin, &token, &root_a, &1500, &DEFAULT_EXPIRATION, &None, &None);
+    client_b.initialize(&admin, &token, &root_a, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // The proof generated for contract_a must work on contract_a.
     client_a.claim(&claimant, &1000, &proof_for_a);
@@ -1241,7 +1241,7 @@ fn test_is_claimed_refreshes_persistent_ttl() {
 
     let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Claim so the Claimed(claimant) persistent entry exists.
     client.claim(&claimant, &1000, &proof);
@@ -1272,7 +1272,7 @@ fn test_is_claimed_false_for_unclaimed_after_ledger_advance() {
 
     let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
     client.claim(&claimant, &1000, &proof);
 
     env.ledger()
@@ -1402,10 +1402,10 @@ fn test_reclaim_zero_balance_after_all_claimed() {
     let claimant1 = Address::generate(&env);
 
     let (root, proof0, proof1) =
-        build_two_leaf_tree(&env, &claimant0, 1000, &claimant1, 500);
+        build_two_leaf_tree(&env, &contract_id, &claimant0, 1000, &claimant1, 500);
 
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Both claimants claim their full allocation — the contract is now empty.
     client.claim(&claimant0, &1000, &proof0);
@@ -1453,7 +1453,7 @@ fn test_claim_for_success_tokens_go_to_claimant() {
 
     let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     let claimant_balance_before = TokenClient::new(&env, &token).balance(&claimant);
 
@@ -1479,7 +1479,7 @@ fn test_claim_for_double_claim_fails() {
 
     let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     client.claim_for(&claimant, &1000, &proof);
 
@@ -1501,7 +1501,7 @@ fn test_claim_for_invalid_proof_fails() {
 
     let (root, _, proof_other) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &other, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // Submit other's proof for claimant — must be rejected.
     let result = client.try_claim_for(&claimant, &500, &proof_other);
@@ -1521,7 +1521,7 @@ fn test_claim_then_claim_for_fails() {
 
     let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
     mint(&env, &token, &admin, &admin, 1500);
-    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
 
     // First claim the normal way.
     client.claim(&claimant, &1000, &proof);
@@ -1533,4 +1533,136 @@ fn test_claim_then_claim_for_fails() {
         Err(Ok(AirdropError::AlreadyClaimed)),
         "claim_for must fail after regular claim for the same address"
     );
+}
+
+// ─── Issue #42: Configurable TTLs ─────────────────────────────────────────
+
+/// When claimed_ttl and instance_ttl are passed as Some(_), the contract stores
+/// the caller-supplied values and returns them via claimed_ttl() / instance_ttl().
+#[test]
+fn test_initialize_custom_ttls_stored() {
+    let (env, admin, token, contract_id) = setup();
+    let client = AirdropContractClient::new(&env, &contract_id);
+    let claimant = Address::generate(&env);
+
+    let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
+    mint(&env, &token, &admin, &admin, 1500);
+
+    let custom_claimed_ttl: u32 = 500_000;
+    let custom_instance_ttl: u32 = 1_000_000;
+
+    client.initialize(
+        &admin,
+        &token,
+        &root,
+        &1500,
+        &DEFAULT_EXPIRATION,
+        &Some(custom_claimed_ttl),
+        &Some(custom_instance_ttl),
+    );
+
+    assert_eq!(client.claimed_ttl(), custom_claimed_ttl);
+    assert_eq!(client.instance_ttl(), custom_instance_ttl);
+}
+
+/// When None is passed for both TTLs, the contract falls back to the compile-time
+/// defaults CLAIMED_TTL and INSTANCE_TTL.
+#[test]
+fn test_initialize_default_ttls_when_none() {
+    let (env, admin, token, contract_id) = setup();
+    let client = AirdropContractClient::new(&env, &contract_id);
+    let claimant = Address::generate(&env);
+
+    let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
+    mint(&env, &token, &admin, &admin, 1500);
+
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
+
+    assert_eq!(client.claimed_ttl(), CLAIMED_TTL);
+    assert_eq!(client.instance_ttl(), INSTANCE_TTL);
+}
+
+/// A custom claimed_ttl is used when extending the persistent Claimed entry.
+/// We verify by checking that the contract accepts a claim and stores it
+/// correctly even with a non-default TTL.
+#[test]
+fn test_custom_claimed_ttl_used_during_claim() {
+    let (env, admin, token, contract_id) = setup();
+    let client = AirdropContractClient::new(&env, &contract_id);
+    let claimant = Address::generate(&env);
+
+    let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
+    mint(&env, &token, &admin, &admin, 1500);
+
+    // Short TTL — 1000 ledgers.
+    client.initialize(
+        &admin,
+        &token,
+        &root,
+        &1500,
+        &DEFAULT_EXPIRATION,
+        &Some(1_000_u32),
+        &None,
+    );
+
+    client.claim(&claimant, &1000, &proof);
+    assert!(client.is_claimed(&claimant));
+}
+
+// ─── Issue #57: remaining_balance ─────────────────────────────────────────
+
+/// remaining_balance() returns 0 for an uninitialised contract.
+#[test]
+fn test_remaining_balance_uninitialised_returns_zero() {
+    let (env, _admin, _token, contract_id) = setup();
+    let client = AirdropContractClient::new(&env, &contract_id);
+    assert_eq!(client.remaining_balance(), 0);
+}
+
+/// remaining_balance() equals total_deposited right after initialisation.
+#[test]
+fn test_remaining_balance_equals_total_after_init() {
+    let (env, admin, token, contract_id) = setup();
+    let client = AirdropContractClient::new(&env, &contract_id);
+    let claimant = Address::generate(&env);
+
+    let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
+    mint(&env, &token, &admin, &admin, 1500);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
+
+    assert_eq!(client.remaining_balance(), 1500);
+}
+
+/// remaining_balance() decreases after a claim.
+#[test]
+fn test_remaining_balance_decreases_after_claim() {
+    let (env, admin, token, contract_id) = setup();
+    let client = AirdropContractClient::new(&env, &contract_id);
+    let claimant = Address::generate(&env);
+
+    let (root, proof, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
+    mint(&env, &token, &admin, &admin, 1500);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
+
+    assert_eq!(client.remaining_balance(), 1500, "balance before claim");
+    client.claim(&claimant, &1000, &proof);
+    assert_eq!(client.remaining_balance(), 500, "balance after claim of 1000");
+}
+
+/// remaining_balance() is 0 after reclaim.
+#[test]
+fn test_remaining_balance_zero_after_reclaim() {
+    let (env, admin, token, contract_id) = setup();
+    let client = AirdropContractClient::new(&env, &contract_id);
+    let claimant = Address::generate(&env);
+
+    let (root, _, _) = build_two_leaf_tree(&env, &contract_id, &claimant, 1000, &admin, 500);
+    mint(&env, &token, &admin, &admin, 1500);
+    client.initialize(&admin, &token, &root, &1500, &DEFAULT_EXPIRATION, &None, &None);
+
+    // Advance past expiration and reclaim.
+    env.ledger().set_timestamp(DEFAULT_EXPIRATION);
+    client.reclaim();
+
+    assert_eq!(client.remaining_balance(), 0, "balance after reclaim");
 }

@@ -160,6 +160,71 @@ export function createAirdropClient(config: NetworkConfig) {
   }
 
   /**
+   * Fetch the contract's current token balance (remaining claimable tokens).
+   *
+   * Queries the SEP-41 token contract for this contract's balance. As
+   * recipients claim tokens the balance decreases from `totalDeposited`.
+   *
+   * @returns Current token balance in base units, or `0n` if the contract
+   *   is not yet initialised.
+   *
+   * @example
+   * ```ts
+   * const balance = await client.remainingBalance();
+   * console.log("Tokens left:", balance.toString());
+   * ```
+   */
+  async function remainingBalance(): Promise<bigint> {
+    const result = await simulateRead(contractInst.call("remaining_balance"));
+    return BigInt(scValToNative(result) as number);
+  }
+
+  /**
+   * Fetch the decimal precision of the airdrop token by querying its SEP-41
+   * `decimals()` function.
+   *
+   * SEP-41 tokens expose a `decimals()` entry point that returns a `u32` value.
+   * For example, a token with `decimals() = 7` represents `1_000_000_0` raw
+   * units as `1.0000000` in display notation.
+   *
+   * @returns Token decimal count as a number, or `null` if the token address
+   *   is not set, the token contract does not implement `decimals()`, or the
+   *   call fails for any reason.
+   *
+   * @example
+   * ```ts
+   * const decimals = await client.tokenDecimals();
+   * if (decimals !== null) {
+   *   const display = formatAmount(rawAmount, decimals);
+   * }
+   * ```
+   */
+  async function tokenDecimals(): Promise<number | null> {
+    // First we need to know the token contract address.
+    let tokenAddress: string;
+    try {
+      const tokenResult = await simulateRead(contractInst.call("token"));
+      const native = scValToNative(tokenResult);
+      if (!native) return null;
+      // native is an Address object — convert to string
+      tokenAddress = native.toString();
+    } catch {
+      return null;
+    }
+
+    // Now query decimals() on the token contract directly.
+    try {
+      const tokenContract = new Contract(tokenAddress);
+      const result = await simulateRead(tokenContract.call("decimals"));
+      const native = scValToNative(result);
+      if (native === null || native === undefined) return null;
+      return Number(native);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Submit a claim transaction on behalf of the claimant.
    *
    * This method signs and submits the transaction using a raw Stellar secret key.
@@ -410,6 +475,8 @@ export function createAirdropClient(config: NetworkConfig) {
     merkleRoot,
     totalDeposited,
     expiration,
+    remainingBalance,
+    tokenDecimals,
     claim,
     buildClaimTransaction,
     submitSignedTransaction,
