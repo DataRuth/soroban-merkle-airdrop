@@ -74,7 +74,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
       - name: Install workspace dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Audit SDK dependencies
         # Fail the build on high or critical vulnerabilities in sdk/.
         # To suppress a known false-positive, add it to sdk/.npmrc:
@@ -129,7 +129,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
       - name: Install workspace dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Build SDK
         run: pnpm build
         working-directory: sdk
