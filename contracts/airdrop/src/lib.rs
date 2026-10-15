@@ -28,6 +28,7 @@
 //! - `DataKey::TotalDeposited`      → `i128`        (instance)
 //! - `DataKey::Active`              → `bool`        (instance)
 //! - `DataKey::Expiration`          → `u64`         (instance)
+//! - `DataKey::ClaimedCount`          → `u32`           (instance)
 //! - `DataKey::Claimed(addr)`       → `bool`        (persistent, per claimant)
 
 #![no_std]
@@ -576,40 +577,18 @@ impl AirdropContract {
         env.storage().instance().get(&DataKey::Expiration)
     }
 
-    /// Return the configured TTL (ledgers) for per-claimant `Claimed` entries.
+    /// Return the number of successful claims so far.
     ///
-    /// Returns the default [`CLAIMED_TTL`] if the contract is not yet
-    /// initialised (i.e. no value has been stored).
-    pub fn claimed_ttl(env: Env) -> u32 {
-        get_claimed_ttl(&env)
-    }
-
-    /// Return the configured TTL (ledgers) for instance storage.
-    ///
-    /// Returns the default [`INSTANCE_TTL`] if the contract is not yet
-    /// initialised (i.e. no value has been stored).
-    pub fn instance_ttl(env: Env) -> u32 {
-        get_instance_ttl(&env)
-    }
-
-    /// Return the contract's current token balance.
-    ///
-    /// Queries the SEP-41 token contract for the balance held by this contract.
-    /// As recipients claim tokens, this value decreases from `total_deposited`.
-    ///
-    /// Returns `0` if the contract is not initialised (no token address stored).
-    ///
-    /// # Issue #57
-    ///
-    /// This function allows callers to see how many tokens remain claimable
-    /// without needing to query the token contract directly.
-    pub fn remaining_balance(env: Env) -> i128 {
-        extend_instance_ttl(&env);
-        let token: Option<Address> = env.storage().instance().get(&DataKey::TokenAddress);
-        match token {
-            Some(t) => TokenClient::new(&env, &t).balance(&env.current_contract_address()),
-            None => 0,
-        }
+    /// Refreshes instance storage TTL so dormant airdrops with no new claims
+    /// do not have their on-chain data archived.
+    pub fn claimed_count(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+        env.storage()
+            .instance()
+            .get(&DataKey::ClaimedCount)
+            .unwrap_or(0)
     }
 }
 
