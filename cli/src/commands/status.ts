@@ -8,7 +8,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import { createAirdropClient, NETWORKS } from "@soroban-merkle-airdrop/sdk";
+import { createAirdropClient, NETWORKS, formatAmount } from "@soroban-merkle-airdrop/sdk";
 
 export interface StatusOptions {
   address?: string;
@@ -61,6 +61,22 @@ export async function runStatusAction(
       client.expiration(),
     ]);
 
+    // Issue #57: query remaining balance.
+    let remaining: bigint = 0n;
+    try {
+      remaining = await client.remainingBalance();
+    } catch {
+      // Non-fatal: contract may not have this function in older deployments.
+    }
+
+    // Issue #58: try to get token decimals for human-readable formatting.
+    let decimals: number | null = null;
+    try {
+      decimals = await client.tokenDecimals();
+    } catch {
+      // Non-fatal: fall back to raw display.
+    }
+
     let claimed: boolean | undefined;
     if (opts.address) {
       claimed = await client.isClaimed(opts.address);
@@ -74,7 +90,9 @@ export async function runStatusAction(
         active,
         root: root ?? null,
         deposited: total.toString(),
+        remaining: remaining.toString(),
         expiration: exp !== null ? exp.toString() : null,
+        decimals: decimals ?? null,
       };
       if (opts.address !== undefined) {
         output["address"] = opts.address;
@@ -85,6 +103,18 @@ export async function runStatusAction(
     }
 
     // ── Human-readable output ─────────────────────────────────────────────
+
+    /**
+     * Format an amount for display, using decimals when available.
+     * Shows: "100.0000000 (1000000000 raw)" when decimals are known.
+     * Falls back to raw amount string when decimals are unavailable.
+     */
+    function displayAmount(raw: bigint): string {
+      if (decimals !== null) {
+        return `${formatAmount(raw, decimals)} (${raw.toString()} raw)`;
+      }
+      return raw.toString();
+    }
 
     // Format expiration for display.
     let expirationLine: string;
@@ -106,7 +136,8 @@ export async function runStatusAction(
     console.log(`  ${chalk.bold("Network:")}     ${network}`);
     console.log(`  ${chalk.bold("Active:")}      ${active ? chalk.green("yes") : chalk.red("no")}`);
     console.log(`  ${chalk.bold("Root:")}        ${chalk.cyan(root ?? "not initialized")}`);
-    console.log(`  ${chalk.bold("Deposited:")}   ${total.toString()}`);
+    console.log(`  ${chalk.bold("Deposited:")}   ${displayAmount(total)}`);
+    console.log(`  ${chalk.bold("Remaining:")}   ${displayAmount(remaining)}`);
     console.log(`  ${chalk.bold("Expiration:")}  ${expirationLine}`);
 
     if (opts.address) {

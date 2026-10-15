@@ -26,6 +26,8 @@ const mockClient = {
   totalDeposited: vi.fn(),
   expiration: vi.fn(),
   isClaimed: vi.fn(),
+  remainingBalance: vi.fn(),
+  tokenDecimals: vi.fn(),
 };
 
 vi.mock("@soroban-merkle-airdrop/sdk", () => ({
@@ -39,6 +41,14 @@ vi.mock("@soroban-merkle-airdrop/sdk", () => ({
       rpcUrl: "https://mainnet.sorobanrpc.com",
       networkPassphrase: "Public Global Stellar Network ; September 2015",
     },
+  },
+  // Issue #58: formatAmount must be exported from the mock so status.ts can use it.
+  formatAmount: (raw: bigint, decimals: number): string => {
+    if (decimals === 0) return raw.toString();
+    const factor = 10n ** BigInt(decimals);
+    const whole = raw / factor;
+    const fraction = raw % factor;
+    return `${whole}.${fraction.toString().padStart(decimals, "0")}`;
   },
 }));
 
@@ -127,6 +137,8 @@ describe("status command — runStatusAction", () => {
     mockClient.totalDeposited.mockResolvedValue(15000n);
     mockClient.expiration.mockResolvedValue(9999999999n); // far future
     mockClient.isClaimed.mockResolvedValue(false);
+    mockClient.remainingBalance.mockResolvedValue(10000n);
+    mockClient.tokenDecimals.mockResolvedValue(null);
     delete process.env["AIRDROP_CONTRACT_ID"];
   });
 
@@ -279,6 +291,8 @@ describe("status command — Issue #68: --rpc-url forwarding", () => {
     mockClient.merkleRoot.mockResolvedValue(MERKLE_ROOT);
     mockClient.totalDeposited.mockResolvedValue(0n);
     mockClient.expiration.mockResolvedValue(null);
+    mockClient.remainingBalance.mockResolvedValue(0n);
+    mockClient.tokenDecimals.mockResolvedValue(null);
     delete process.env["AIRDROP_CONTRACT_ID"];
   });
 
@@ -336,6 +350,8 @@ describe("status command — Issue #67: --json output flag", () => {
     mockClient.totalDeposited.mockResolvedValue(15000n);
     mockClient.expiration.mockResolvedValue(9999999999n);
     mockClient.isClaimed.mockResolvedValue(false);
+    mockClient.remainingBalance.mockResolvedValue(10000n);
+    mockClient.tokenDecimals.mockResolvedValue(null);
     delete process.env["AIRDROP_CONTRACT_ID"];
   });
 
@@ -368,7 +384,9 @@ describe("status command — Issue #67: --json output flag", () => {
     expect(parsed).toHaveProperty("active");
     expect(parsed).toHaveProperty("root");
     expect(parsed).toHaveProperty("deposited");
+    expect(parsed).toHaveProperty("remaining");
     expect(parsed).toHaveProperty("expiration");
+    expect(parsed).toHaveProperty("decimals");
   });
 
   it("JSON active field is boolean true when contract is active", async () => {
@@ -439,5 +457,101 @@ describe("status command — Issue #67: --json output flag", () => {
     const parsed = JSON.parse(lines.find((l) => l.trimStart().startsWith("{"))!);
     expect(parsed).not.toHaveProperty("address");
     expect(parsed).not.toHaveProperty("claimed");
+  });
+});
+
+// ─── Issue #57: remaining_balance display ─────────────────────────────────────
+
+describe("status command — Issue #57: remaining balance", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClient.isActive.mockResolvedValue(true);
+    mockClient.merkleRoot.mockResolvedValue(MERKLE_ROOT);
+    mockClient.totalDeposited.mockResolvedValue(15000n);
+    mockClient.expiration.mockResolvedValue(9999999999n);
+    mockClient.isClaimed.mockResolvedValue(false);
+    mockClient.remainingBalance.mockResolvedValue(9000n);
+    mockClient.tokenDecimals.mockResolvedValue(null);
+    delete process.env["AIRDROP_CONTRACT_ID"];
+  });
+
+  afterEach(() => {
+    delete process.env["AIRDROP_CONTRACT_ID"];
+  });
+
+  it("displays remaining balance in human-readable output", async () => {
+    const { lines } = await run({}, { contractId: CONTRACT_ID });
+    const all = lines.join("\n");
+    expect(all).toContain("9000");
+    expect(all.toLowerCase()).toContain("remaining");
+  });
+
+  it("JSON output includes remaining field", async () => {
+    const { lines } = await run({ json: true }, { contractId: CONTRACT_ID });
+    const parsed = JSON.parse(lines.find((l) => l.trimStart().startsWith("{"))!);
+    expect(parsed.remaining).toBe("9000");
+  });
+
+  it("continues gracefully when remainingBalance throws", async () => {
+    mockClient.remainingBalance.mockRejectedValue(new Error("not found"));
+    const { lines, processExited } = await run({}, { contractId: CONTRACT_ID });
+    expect(processExited).toBe(false);
+    // Should still display other fields
+    expect(lines.join("\n")).toContain(CONTRACT_ID);
+  });
+});
+
+// ─── Issue #58: tokenDecimals formatted output ────────────────────────────────
+
+describe("status command — Issue #58: token decimals formatting", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClient.isActive.mockResolvedValue(true);
+    mockClient.merkleRoot.mockResolvedValue(MERKLE_ROOT);
+    mockClient.totalDeposited.mockResolvedValue(1_000_000_0n);
+    mockClient.expiration.mockResolvedValue(9999999999n);
+    mockClient.isClaimed.mockResolvedValue(false);
+    mockClient.remainingBalance.mockResolvedValue(5_000_000_0n);
+    mockClient.tokenDecimals.mockResolvedValue(7);
+    delete process.env["AIRDROP_CONTRACT_ID"];
+  });
+
+  afterEach(() => {
+    delete process.env["AIRDROP_CONTRACT_ID"];
+  });
+
+  it("shows formatted amount when decimals are available", async () => {
+    const { lines } = await run({}, { contractId: CONTRACT_ID });
+    const all = lines.join("\n");
+    // 10_000_000 raw with 7 decimals = 1.0000000
+    expect(all).toContain("1.0000000");
+  });
+
+  it("shows raw fallback when decimals returns null", async () => {
+    mockClient.tokenDecimals.mockResolvedValue(null);
+    const { lines } = await run({}, { contractId: CONTRACT_ID });
+    const all = lines.join("\n");
+    // Should show raw number, no decimal point for deposited
+    expect(all).toContain("10000000");
+  });
+
+  it("JSON output includes decimals field", async () => {
+    const { lines } = await run({ json: true }, { contractId: CONTRACT_ID });
+    const parsed = JSON.parse(lines.find((l) => l.trimStart().startsWith("{"))!);
+    expect(parsed.decimals).toBe(7);
+  });
+
+  it("JSON decimals is null when tokenDecimals() returns null", async () => {
+    mockClient.tokenDecimals.mockResolvedValue(null);
+    const { lines } = await run({ json: true }, { contractId: CONTRACT_ID });
+    const parsed = JSON.parse(lines.find((l) => l.trimStart().startsWith("{"))!);
+    expect(parsed.decimals).toBeNull();
+  });
+
+  it("continues gracefully when tokenDecimals throws", async () => {
+    mockClient.tokenDecimals.mockRejectedValue(new Error("SEP-41 not supported"));
+    const { lines, processExited } = await run({}, { contractId: CONTRACT_ID });
+    expect(processExited).toBe(false);
+    expect(lines.join("\n")).toContain(CONTRACT_ID);
   });
 });
