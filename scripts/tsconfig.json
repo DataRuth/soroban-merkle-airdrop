@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "typeRoots": ["../sdk/node_modules/@types", "../cli/node_modules/@types"],
+    "baseUrl": "..",
+    "paths": {
+      "@stellar/stellar-sdk": ["sdk/node_modules/@stellar/stellar-sdk"]
+    }
+  },
+  "include": ["./**/*.ts"]
+}
