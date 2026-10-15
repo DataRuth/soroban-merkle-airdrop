@@ -51,6 +51,12 @@ export function createAirdropClient(config: NetworkConfig) {
     return BigInt(scValToNative(result) as number);
   }
 
+  /** Return the number of successful claims so far. */
+  async function claimedCount(): Promise<number> {
+    const result = await simulateRead(contractInst.call("claimed_count"));
+    return scValToNative(result) as number;
+  }
+
   /**
    * Submit a claim transaction.
    *
@@ -235,7 +241,7 @@ export function createAirdropClient(config: NetworkConfig) {
     return new Promise((r) => setTimeout(r, ms));
   }
 
-  return { isClaimed, isActive, merkleRoot, totalDeposited, claim, buildClaimTransaction, submitSignedTransaction };
+  return { isClaimed, isActive, merkleRoot, totalDeposited, claimedCount, claim, buildClaimTransaction, submitSignedTransaction };
 }
 
 /**

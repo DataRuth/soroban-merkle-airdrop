@@ -28,6 +28,7 @@
 //! - `DataKey::TotalDeposited`      → `i128`        (instance)
 //! - `DataKey::Active`              → `bool`        (instance)
 //! - `DataKey::Expiration`          → `u64`         (instance)
+//! - `DataKey::ClaimedCount`          → `u32`           (instance)
 //! - `DataKey::Claimed(addr)`       → `bool`        (persistent, per claimant)
 
 #![no_std]
@@ -185,6 +186,10 @@ impl AirdropContract {
             CLAIMED_TTL_THRESHOLD,
             CLAIMED_TTL,
         );
+
+        // Increment claimed count.
+        let count: u32 = env.storage().instance().get(&DataKey::ClaimedCount).unwrap_or(0);
+        env.storage().instance().set(&DataKey::ClaimedCount, &(count + 1));
 
         // Transfer tokens to claimant.
         let token: Address = env
@@ -369,5 +374,19 @@ impl AirdropContract {
             .instance()
             .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
         env.storage().instance().get(&DataKey::Expiration)
+    }
+
+    /// Return the number of successful claims so far.
+    ///
+    /// Refreshes instance storage TTL so dormant airdrops with no new claims
+    /// do not have their on-chain data archived.
+    pub fn claimed_count(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+        env.storage()
+            .instance()
+            .get(&DataKey::ClaimedCount)
+            .unwrap_or(0)
     }
 }
