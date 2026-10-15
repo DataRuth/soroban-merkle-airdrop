@@ -33,4 +33,4 @@ export type {
   NetworkConfig,
   ClaimResult,
 } from "./types.js";
-export { NETWORKS } from "./types.js";
+export { NETWORKS, formatAmount } from "./types.js";
