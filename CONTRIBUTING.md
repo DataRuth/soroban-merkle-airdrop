@@ -80,6 +80,67 @@ Navigate to the contract directory or run commands targeting the manifest path:
 
 ---
 
+## 🌐 Integration Testing
+
+The `scripts/integration-test.ts` script runs a full end-to-end test against the **Stellar testnet**. It deploys a fresh contract instance, builds a 5-entry Merkle tree, initialises the airdrop, claims tokens for one address, verifies the balance changed, and reclaims the remaining tokens at the end.
+
+### Prerequisites
+
+1. **A funded testnet account.** Get one from [Friendbot](https://friendbot.stellar.org/?addr=YOUR_PUBKEY). The admin account needs enough XLM to cover transaction fees and the total token deposit.
+
+2. **Compiled WASM.** Build the contract before running the test:
+   ```bash
+   cargo build --manifest-path contracts/airdrop/Cargo.toml \
+     --target wasm32v1-none --release
+   ```
+
+3. **`ts-node` and TypeScript** installed globally or via `npx`:
+   ```bash
+   npm install -g ts-node typescript
+   # or use: npx ts-node scripts/integration-test.ts
+   ```
+
+4. **Node.js dependencies** installed at the repo root:
+   ```bash
+   pnpm install
+   ```
+
+### Running the test
+
+```bash
+STELLAR_SECRET_KEY=S... ts-node --project scripts/tsconfig.json scripts/integration-test.ts
+```
+
+### Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `STELLAR_SECRET_KEY` | **Yes** | Admin/deployer secret key (`S...`). Must be funded on testnet. |
+| `TOKEN_CONTRACT_ID` | No | Pre-deployed SEP-41 token contract ID. Defaults to testnet native XLM SAC. |
+| `AIRDROP_WASM_PATH` | No | Path to the compiled `.wasm` file. Defaults to `target/wasm32v1-none/release/soroban_merkle_airdrop.wasm`. |
+| `RPC_URL` | No | Soroban RPC endpoint. Defaults to `https://soroban-testnet.stellar.org`. |
+| `NETWORK_PASSPHRASE` | No | Network passphrase. Defaults to the testnet passphrase. |
+
+### What the script verifies
+
+1. WASM uploads successfully and returns a `wasmHash`.
+2. Contract deploys and a `contractId` is obtained.
+3. `initialize()` succeeds: `is_active == true`, `total_deposited == 1500`.
+4. After `claim()` for `claimants[0]` (100 stroops):
+   - Token balance increased by exactly 100 stroops.
+   - `claimed_count() == 1`.
+   - `is_claimed(claimants[0]) == true`.
+5. After `reclaim()` (once expiry passes — 2 minutes):
+   - Admin receives the remaining 1400 stroops back.
+
+### Notes
+
+- The integration test **does not run in CI** because it requires a live testnet account. Run it manually before opening a PR that modifies the contract's claim or reclaim logic.
+- The 2-minute expiration is intentional so the reclaim step finishes quickly. Do not use such short expirations in production.
+- If you want to test with a custom SEP-41 token (not XLM), deploy a token contract first and pass `TOKEN_CONTRACT_ID=C...` when invoking the script.
+
+---
+
 ## 📥 Pull Request (PR) Guidelines
 
 * **Target Branch:** Always base your feature or fix branch off the `main` branch.
