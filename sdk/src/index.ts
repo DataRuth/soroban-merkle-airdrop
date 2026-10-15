@@ -28,5 +28,10 @@ export type {
   MerkleTreeResult,
   NetworkConfig,
   ClaimResult,
+  InitEvent,
+  ClaimedEvent,
+  ReclaimedEvent,
+  PausedEvent,
+  AirdropEvent,
 } from "./types.js";
-export { NETWORKS } from "./types.js";
+export { NETWORKS, AirdropError, AirdropContractError, RpcError } from "./types.js";
