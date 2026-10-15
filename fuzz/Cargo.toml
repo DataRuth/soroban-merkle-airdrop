@@ -1,0 +1,25 @@
+[package]
+name = "soroban-merkle-airdrop-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+# cargo-fuzz injects the libfuzzer-sys crate automatically via the nightly
+# toolchain build. We declare it explicitly so editors and IDEs do not flag
+# the `fuzz_target!` macro as unknown.
+libfuzzer-sys = "0.4"
+
+# Pull in the contract's rlib so the fuzz target can call merkle::* directly
+# without going through the Soroban host mock.
+soroban-merkle-airdrop = { path = "../contracts/airdrop" }
+soroban-sdk = { version = "27.0.6", features = ["testutils"] }
+
+[[bin]]
+name = "verify_proof"
+path = "fuzz_targets/verify_proof.rs"
+test = false
+doc = false
