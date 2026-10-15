@@ -128,6 +128,12 @@ export function createAirdropClient(config: NetworkConfig) {
     return BigInt(scValToNative(result) as number);
   }
 
+  /** Return the number of successful claims so far. */
+  async function claimedCount(): Promise<number> {
+    const result = await simulateRead(contractInst.call("claimed_count"));
+    return scValToNative(result) as number;
+  }
+
   /**
    * Fetch the expiration timestamp (Unix seconds) after which unclaimed tokens
    * can be reclaimed by the admin.

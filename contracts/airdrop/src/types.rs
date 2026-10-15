@@ -19,10 +19,8 @@ pub enum DataKey {
     Active,
     /// Unix timestamp (seconds) after which `reclaim()` is permitted.
     Expiration,
-    /// Configured TTL (in ledgers) for per-claimant `Claimed` entries.
-    ClaimedTtl,
-    /// Configured TTL (in ledgers) for instance storage.
-    InstanceTtl,
+    /// Count of successful claims.
+    ClaimedCount,
 }
 
 /// Errors returned by the airdrop contract.
