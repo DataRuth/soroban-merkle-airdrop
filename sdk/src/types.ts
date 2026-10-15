@@ -191,6 +191,42 @@ export interface ClaimResult {
   amount: bigint;
 }
 
+// ─── Amount formatting ───────────────────────────────────────────────────────
+
+/**
+ * Format a raw token amount into a human-readable decimal string using the
+ * token's decimal precision.
+ *
+ * For example, with `decimals = 7`:
+ * - `1_000_000_0n` → `"1.0000000"`
+ * - `15000n`       → `"0.0015000"`
+ *
+ * @param raw      - Raw token amount in base units.
+ * @param decimals - Number of decimal places (from SEP-41 `decimals()`).
+ * @returns Formatted decimal string.
+ *
+ * @example
+ * ```ts
+ * import { formatAmount } from '@soroban-merkle-airdrop/sdk';
+ *
+ * const decimals = await client.tokenDecimals();
+ * if (decimals !== null) {
+ *   console.log(formatAmount(1_000_000_0n, decimals)); // "1.0000000"
+ * }
+ * ```
+ */
+export function formatAmount(raw: bigint, decimals: number): string {
+  if (decimals === 0) return raw.toString();
+
+  const factor = 10n ** BigInt(decimals);
+  const whole = raw / factor;
+  const fraction = raw % factor;
+
+  // Pad fraction with leading zeros to fill `decimals` digits.
+  const fracStr = fraction.toString().padStart(decimals, "0");
+  return `${whole}.${fracStr}`;
+}
+
 // ─── Error types ─────────────────────────────────────────────────────────────
 
 /**
