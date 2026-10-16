@@ -6,6 +6,96 @@ As a multi-ecosystem repository (Rust smart contracts + TypeScript/Node tools), 
 
 ---
 
+## 🏁 First-time Setup
+
+This project uses a **pnpm workspace** to manage the three TypeScript packages (`sdk`, `cli`, `web`) as a single monorepo. Please follow the steps below to get a correctly linked local environment.
+
+### 1. Install pnpm
+
+If you don't have `pnpm` installed yet, the recommended way is via [Corepack](https://nodejs.org/api/corepack.html) (bundled with Node.js 16+):
+
+```bash
+corepack enable
+corepack prepare pnpm@latest --activate
+```
+
+Or install globally with npm:
+
+```bash
+npm install -g pnpm
+```
+
+Verify the installation:
+
+```bash
+pnpm --version   # should print 9.x or higher
+```
+
+### 2. Install all workspace dependencies from the repo root
+
+> ⚠️ **Important:** Run `pnpm install` from the **repository root**, not from inside individual package directories. Running `npm install` or `pnpm install` from within `sdk/`, `cli/`, or `web/` will bypass workspace linking and may pull in duplicate or mismatched packages.
+
+```bash
+# From the repository root:
+git clone https://github.com/<your-fork>/soroban-merkle-airdrop.git
+cd soroban-merkle-airdrop
+pnpm install
+```
+
+`pnpm install` reads `pnpm-workspace.yaml` and installs all packages listed there (`sdk`, `cli`, `web`) in one pass. It also creates **workspace symlinks** automatically:
+
+- `cli/node_modules/@soroban-merkle-airdrop/sdk` → `../../sdk`
+- `web/node_modules/@soroban-merkle-airdrop/sdk` → `../../sdk`
+
+This means `cli` and `web` import the **local source** of `sdk` instead of a published npm version.
+
+### 3. Build all packages
+
+After installing, compile all TypeScript packages in dependency order with a single command:
+
+```bash
+# From the repository root:
+pnpm -r build
+```
+
+`-r` (recursive) tells pnpm to run the `build` script in every workspace package. Because `cli` and `web` depend on `sdk`, build `sdk` first manually if you only want to build a subset:
+
+```bash
+pnpm --filter @soroban-merkle-airdrop/sdk build
+pnpm --filter @soroban-merkle-airdrop/cli build
+```
+
+### 4. Workspace dependency overview
+
+| Package | Depends on (workspace) | Local link path |
+|---------|------------------------|-----------------|
+| `sdk`   | —                      | `sdk/` |
+| `cli`   | `@soroban-merkle-airdrop/sdk` | `cli/node_modules/@soroban-merkle-airdrop/sdk` → `sdk/` |
+| `web`   | `@soroban-merkle-airdrop/sdk` | `web/node_modules/@soroban-merkle-airdrop/sdk` → `sdk/` |
+
+The dependency is declared as `"workspace:*"` in both `cli/package.json` and `web/package.json`. This is a pnpm-specific protocol that always resolves to the local workspace package, regardless of its published version.
+
+### 5. Troubleshooting: SDK changes not picked up by CLI or web
+
+If you edit `sdk/src/` but the CLI or web still reflects old behaviour, the compiled output in `sdk/dist/` is stale. Rebuild the SDK:
+
+```bash
+pnpm --filter @soroban-merkle-airdrop/sdk build
+# or shorthand from repo root:
+cd sdk && pnpm build
+```
+
+If that doesn't help, the workspace link itself may be broken (e.g. after a manual `npm install` inside a sub-package). Fix it by re-running from the root:
+
+```bash
+# Delete all node_modules and reinstall cleanly:
+find . -name 'node_modules' -maxdepth 3 -type d -exec rm -rf {} + 2>/dev/null; true
+pnpm install
+pnpm -r build
+```
+
+---
+
 ## 🛠️ Repository & Monorepo Structure
 
 This project is organized into distinct functional workspaces:
