@@ -45,7 +45,7 @@ export const claimCommand = new Command("claim")
       const proof = { ...entry, amount: BigInt(entry.amount) };
 
       spinner.text = "Verifying proof locally...";
-      const valid = verifyProof(raw.root, proof.address, proof.amount, proof.proof);
+      const valid = verifyProof(raw.root, contractId, proof.address, proof.amount, proof.proof);
       if (!valid) {
         spinner.fail(chalk.red("Proof verification failed — tree may be corrupted"));
         process.exit(1);
@@ -54,6 +54,8 @@ export const claimCommand = new Command("claim")
       const preset = NETWORKS[network];
       const client = createAirdropClient({
         ...preset,
+        // Override rpcUrl if --rpc-url was provided on the global options.
+        ...(globalOpts.rpcUrl ? { rpcUrl: globalOpts.rpcUrl } : {}),
         contractId,
       });
 

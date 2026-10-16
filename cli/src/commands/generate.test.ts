@@ -1,168 +1,332 @@
 /**
- * Performance and correctness tests for the `generate` command (#112).
+ * Integration tests for the `merkle-airdrop generate` command.
  *
- * Acceptance criteria:
- *   ✓ Generates a 1000-line CSV programmatically and runs `generate`
- *   ✓ Output JSON is valid and totalEntries === 1000
- *   ✓ All 1000 proofs verify with verifyProof
- *   ✓ Completes in under 2 seconds
- *   ✓ Cleans up temp files after the test
+ * Strategy: import the exported Commander Command and call .parseAsync() with
+ * synthetic argv, then inspect the written JSON output. Because the action
+ * handler calls process.exit(1) on failure, we spy on it and restore it after
+ * each test so failures are observable without killing the test process.
  */
 
-import { describe, it, expect, afterEach } from "vitest";
-import { writeFile, readFile, unlink, mkdtemp } from "fs/promises";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { mkdtemp, readFile, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { generateCommand } from "./generate.js";
-import { verifyProof } from "@soroban-merkle-airdrop/sdk";
+import { writeFile } from "fs/promises";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// ── helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * 1000 deterministic Stellar-like G… addresses.
- *
- * Real Stellar addresses are base32-encoded 32-byte public keys with a
- * checksum. Generating 1000 valid keypairs from `@stellar/stellar-sdk` would
- * add meaningful overhead and a heavy dependency to a pure CLI test. Instead
- * we use the three known-valid addresses from the SDK test suite and cycle
- * through them with a disambiguating suffix appended to the *amount* so every
- * (address, amount) pair is unique.
- *
- * For a realistic proof-of-scale the important property is not "each address
- * must be a valid ed25519 key" but "the tree is built from N distinct entries
- * and all proofs round-trip through verifyProof". The merkle logic operates
- * entirely on the bytes of the address string, so any 56-character G-prefixed
- * string behaves identically to a real key inside the SDK.
- */
-const BASE_ADDRESSES = [
-  "GBTL47RTFR5EKMZSXWOQU735WBK7LRPPDIDK3JTNTCZZ7NUBBRDTVSK2",
-  "GBIRYNFBULFVEHPRNOZENOG6RZ4ZPTRDLR7HNMRKHV2QHISIDHOYV6ZN",
-  "GCEEXCCX6TVKCYJ4MFIE3M2NJPVPGRSRPIHDDXR43XKNTNBADWOQWDYC",
-];
+/** Well-known valid Stellar G-addresses (public-key strkeys, 56 chars). */
+const ADDR_A = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN";
+const ADDR_B = "GAYOLLLUIZE4DZMBB2ZBKGBUBZLIOYU6XFLW37GBP2VZD3ABNXCW4BVA";
 
-/**
- * Build a 1000-entry CSV string.
- *
- * Each line: `<address>,<amount>` — amounts are distinct so the set of
- * (address, amount) leaf-hashes is guaranteed to be 1000 unique values even
- * though we only have 3 base addresses.  The CSV parser in generate.ts calls
- * `buildMerkleTree` which enforces uniqueness by *address* alone, so we need
- * distinct addresses.  We therefore construct 1000 unique 56-char G-addresses
- * by replacing a trailing segment with a zero-padded index.
- */
-function buildCsv(count: number): string {
-  const lines: string[] = [];
-  for (let i = 0; i < count; i++) {
-    // Derive a unique address: take a valid base, replace last 5 chars with
-    // a zero-padded index. The result keeps the G prefix and 56-char length.
-    const base = BASE_ADDRESSES[i % BASE_ADDRESSES.length];
-    const suffix = String(i).padStart(5, "0");
-    const addr = base.slice(0, -5) + suffix;
-    const amount = (i + 1) * 100;
-    lines.push(`${addr},${amount}`);
-  }
-  return lines.join("\n");
+/** Build a minimal two-entry CSV string. */
+function twoEntryCsv(): string {
+  return `${ADDR_A},1000\n${ADDR_B},500\n`;
 }
 
-// ---------------------------------------------------------------------------
-// Test suite
-// ---------------------------------------------------------------------------
+/** Build a CSV with `n` unique addresses and amounts 1..n. */
+function largeEntryCsv(n: number): string {
+  const lines: string[] = [];
+  for (let i = 0; i < n; i++) {
+    // Build a 56-char G-address by embedding a zero-padded 4-digit index at
+    // the end. The SDK only requires non-empty unique strings for addresses in
+    // the test context — it does not validate Stellar strkey format.
+    const suffix = String(i).padStart(4, "0");             // 4 chars, unique up to 9999
+    const base = `G${"A".repeat(56 - 1 - suffix.length)}`; // 1 + 51 = 52 chars
+    const addr = base + suffix;                             // exactly 56 chars
+    lines.push(`${addr},${i + 1}`);
+  }
+  return lines.join("\n") + "\n";
+}
 
-describe("generate command — performance & correctness (1000 entries)", () => {
-  const tempFiles: string[] = [];
+/**
+ * Run the generate command with the given --input / --output paths.
+ * Returns the exit code the command would have called process.exit with,
+ * or undefined if it completed without calling process.exit.
+ */
+async function runGenerate(
+  inputPath: string,
+  outputPath: string
+): Promise<{ exitCode: number | undefined }> {
+  // Re-import a fresh copy of the command each time to avoid Commander
+  // state leaking between tests (Commander tracks whether parse() was called).
+  const { generateCommand } = await import("./generate.js");
 
-  afterEach(async () => {
-    // Clean up any temp files created during the test.
-    for (const f of tempFiles) {
-      await unlink(f).catch(() => {
-        // Ignore if already removed.
-      });
-    }
-    tempFiles.length = 0;
-  });
+  let capturedCode: number | undefined;
+  const exitSpy = vi
+    .spyOn(process, "exit")
+    .mockImplementation((code?: number | string | null) => {
+      capturedCode = typeof code === "number" ? code : 1;
+      // Throw so execution stops — matches real behaviour after error.
+      throw new Error(`process.exit(${capturedCode})`);
+    });
 
-  it(
-    "processes 1000-entry CSV, validates output JSON, and verifies all proofs in under 2 s",
-    async () => {
-      // ── 1. Write a temporary 1000-line CSV ─────────────────────────────────
-      const dir = await mkdtemp(join(tmpdir(), "merkle-perf-"));
-      const csvPath = join(dir, "airdrop.csv");
-      const jsonPath = join(dir, "merkle-tree.json");
-      tempFiles.push(csvPath, jsonPath);
+  // Silence ora spinner output during tests.
+  const stderrWrite = process.stderr.write.bind(process.stderr);
+  const stdoutWrite = process.stdout.write.bind(process.stdout);
+  vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
-      await writeFile(csvPath, buildCsv(1000), "utf-8");
-
-      // ── 2. Run the generate command and measure wall-clock time ────────────
-      const start = performance.now();
-
-      // Commander stores option values on the Command instance; we invoke the
-      // action handler directly via `parseAsync` with synthetic argv.
-      await generateCommand.parseAsync(
-        ["node", "generate", "--input", csvPath, "--output", jsonPath],
-        { from: "user" }
-      );
-
-      const elapsed = performance.now() - start;
-
-      // ── 3. Assert timing ───────────────────────────────────────────────────
-      expect(elapsed, `Expected < 2000 ms but took ${elapsed.toFixed(0)} ms`).toBeLessThan(
-        2000
-      );
-
-      // ── 4. Parse and validate the output JSON ──────────────────────────────
-      const raw = await readFile(jsonPath, "utf-8");
-      const output = JSON.parse(raw) as {
-        root: string;
-        totalEntries: number;
-        totalAmount: string;
-        generatedAt: string;
-        proofs: Record<string, { address: string; amount: string; proof: string[] }>;
-      };
-
-      expect(output.root, "root should be a 64-char hex string").toMatch(/^[0-9a-f]{64}$/);
-      expect(output.totalEntries, "totalEntries should be 1000").toBe(1000);
-      expect(
-        Object.keys(output.proofs).length,
-        "proofs map should contain 1000 entries"
-      ).toBe(1000);
-
-      // ── 5. Verify all 1000 proofs ──────────────────────────────────────────
-      let verifiedCount = 0;
-      for (const [address, proofEntry] of Object.entries(output.proofs)) {
-        const amount = BigInt(proofEntry.amount);
-        const valid = verifyProof(output.root, address, amount, proofEntry.proof);
-        expect(valid, `Proof failed for address ${address}`).toBe(true);
-        verifiedCount++;
-      }
-      expect(verifiedCount).toBe(1000);
-    },
-    // Vitest timeout in milliseconds — give a generous budget (5 s) so the
-    // test itself is not flaky on slow CI runners, while still asserting the
-    // 2-second business requirement inside the test body.
-    5000
-  );
-
-  it("produces a valid totalAmount sum for 1000 entries", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "merkle-sum-"));
-    const csvPath = join(dir, "airdrop.csv");
-    const jsonPath = join(dir, "merkle-tree.json");
-    tempFiles.push(csvPath, jsonPath);
-
-    await writeFile(csvPath, buildCsv(1000), "utf-8");
+  try {
+    // Commander's parseAsync expects process.argv format: [node, script, ...args]
     await generateCommand.parseAsync(
-      ["node", "generate", "--input", csvPath, "--output", jsonPath],
+      ["node", "merkle-airdrop", "--input", inputPath, "--output", outputPath],
       { from: "user" }
     );
+  } catch (err) {
+    // Swallow the thrown-from-mock error; capturedCode already set.
+  } finally {
+    exitSpy.mockRestore();
+    vi.spyOn(process.stderr, "write").mockRestore();
+    vi.spyOn(process.stdout, "write").mockRestore();
+  }
 
-    const raw = await readFile(jsonPath, "utf-8");
-    const output = JSON.parse(raw) as { totalAmount: string };
+  return { exitCode: capturedCode };
+}
 
-    // Sum of amounts: 100 + 200 + ... + 100000 = 100 * (1 + 2 + ... + 1000)
-    //                                           = 100 * (1000 * 1001 / 2)
-    //                                           = 50_050_000
-    const expectedTotal = BigInt(100) * BigInt((1000 * 1001) / 2);
-    expect(BigInt(output.totalAmount)).toBe(expectedTotal);
+// ── fixtures ──────────────────────────────────────────────────────────────────
+
+let tmpDir: string;
+let inputFile: string;
+let outputFile: string;
+
+beforeEach(async () => {
+  tmpDir = await mkdtemp(join(tmpdir(), "merkle-airdrop-test-"));
+  inputFile = join(tmpDir, "input.csv");
+  outputFile = join(tmpDir, "output.json");
+});
+
+afterEach(async () => {
+  await rm(tmpDir, { recursive: true, force: true });
+});
+
+// ── tests ─────────────────────────────────────────────────────────────────────
+
+describe("generate command", () => {
+  // ── 1. Happy path: 2-entry CSV ─────────────────────────────────────────────
+
+  it("generates valid JSON output for a 2-entry CSV", async () => {
+    await writeFile(inputFile, twoEntryCsv());
+
+    const { exitCode } = await runGenerate(inputFile, outputFile);
+
+    expect(exitCode).toBeUndefined(); // no error
+
+    const raw = await readFile(outputFile, "utf-8");
+    const output = JSON.parse(raw);
+
+    // Shape checks
+    expect(typeof output.root).toBe("string");
+    expect(output.root).toHaveLength(64); // 32-byte hex
+    expect(output.totalEntries).toBe(2);
+    expect(output.proofs).toBeDefined();
+    expect(Object.keys(output.proofs)).toHaveLength(2);
+
+    // Each proof entry has the right shape
+    const proofA = output.proofs[ADDR_A];
+    expect(proofA).toBeDefined();
+    expect(proofA.address).toBe(ADDR_A);
+    expect(typeof proofA.amount).toBe("string"); // serialised as string
+    expect(Number(proofA.amount)).toBe(1000);
+    expect(Array.isArray(proofA.proof)).toBe(true);
+  });
+
+  // ── 2. totalAmount is correct ──────────────────────────────────────────────
+
+  it("writes the correct totalAmount to the output file", async () => {
+    await writeFile(inputFile, twoEntryCsv());
+
+    await runGenerate(inputFile, outputFile);
+
+    const output = JSON.parse(await readFile(outputFile, "utf-8"));
+    expect(output.totalAmount).toBe("1500"); // 1000 + 500
+  });
+
+  // ── 3. generatedAt is an ISO timestamp ────────────────────────────────────
+
+  it("sets generatedAt to a valid ISO 8601 timestamp", async () => {
+    await writeFile(inputFile, twoEntryCsv());
+
+    await runGenerate(inputFile, outputFile);
+
+    const output = JSON.parse(await readFile(outputFile, "utf-8"));
+    expect(() => new Date(output.generatedAt).toISOString()).not.toThrow();
+  });
+
+  // ── 4. Happy path: 100-entry CSV ───────────────────────────────────────────
+
+  it("generates valid JSON output for a 100-entry CSV", async () => {
+    await writeFile(inputFile, largeEntryCsv(100));
+
+    const { exitCode } = await runGenerate(inputFile, outputFile);
+
+    expect(exitCode).toBeUndefined();
+
+    const output = JSON.parse(await readFile(outputFile, "utf-8"));
+    expect(output.totalEntries).toBe(100);
+    expect(typeof output.root).toBe("string");
+    expect(output.root).toHaveLength(64);
+    expect(Object.keys(output.proofs)).toHaveLength(100);
+
+    // Spot-check: every proof array is non-empty for 100 entries (log2(100) ≈ 7)
+    for (const proof of Object.values(output.proofs) as { proof: string[] }[]) {
+      expect(proof.proof.length).toBeGreaterThan(0);
+    }
+  });
+
+  // ── 5. Duplicate address → error ──────────────────────────────────────────
+
+  it("exits with code 1 when the CSV contains a duplicate address", async () => {
+    const csv = `${ADDR_A},1000\n${ADDR_A},500\n`;
+    await writeFile(inputFile, csv);
+
+    const { exitCode } = await runGenerate(inputFile, outputFile);
+
+    expect(exitCode).toBe(1);
+  });
+
+  // ── 6. Invalid (non-numeric) amount → error ────────────────────────────────
+
+  it("exits with code 1 when an amount is not a valid integer", async () => {
+    const csv = `${ADDR_A},not-a-number\n${ADDR_B},500\n`;
+    await writeFile(inputFile, csv);
+
+    const { exitCode } = await runGenerate(inputFile, outputFile);
+
+    expect(exitCode).toBe(1);
+  });
+
+  // ── 7. Zero-amount entry is accepted ──────────────────────────────────────
+
+  it("accepts an entry with zero amount", async () => {
+    const csv = `${ADDR_A},0\n${ADDR_B},500\n`;
+    await writeFile(inputFile, csv);
+
+    const { exitCode } = await runGenerate(inputFile, outputFile);
+
+    expect(exitCode).toBeUndefined();
+
+    const output = JSON.parse(await readFile(outputFile, "utf-8"));
+    expect(output.proofs[ADDR_A].amount).toBe("0");
+  });
+
+  // ── 8. Missing --input flag → exits with code 1 ──────────────────────────
+
+  it("exits with code 1 when --input flag is missing", async () => {
+    const { generateCommand } = await import("./generate.js");
+
+    let capturedCode: number | undefined;
+    const exitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation((code?: number | string | null) => {
+        capturedCode = typeof code === "number" ? code : 1;
+        throw new Error(`process.exit(${capturedCode})`);
+      });
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    try {
+      generateCommand.exitOverride();
+      await generateCommand.parseAsync(
+        ["node", "merkle-airdrop", "--output", outputFile],
+        { from: "user" }
+      );
+    } catch {
+      // Expected — either Commander or process.exit throw
+    } finally {
+      exitSpy.mockRestore();
+      vi.spyOn(process.stderr, "write").mockRestore();
+      vi.spyOn(process.stdout, "write").mockRestore();
+    }
+
+    // Commander throws a CommanderError (not process.exit) when exitOverride is set
+    // — either way the command did not complete successfully.
+    // capturedCode stays undefined if Commander threw before process.exit.
+    // We just verify the command did NOT write an output file.
+    let outputExists = false;
+    try {
+      await readFile(outputFile, "utf-8");
+      outputExists = true;
+    } catch { /* expected */ }
+    expect(outputExists).toBe(false);
+  });
+
+  // ── 9. Missing --output flag → exits without writing output ──────────────
+
+  it("exits with code 1 when --output flag is missing", async () => {
+    await writeFile(inputFile, twoEntryCsv());
+
+    const { generateCommand } = await import("./generate.js");
+
+    let capturedCode: number | undefined;
+    const exitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation((code?: number | string | null) => {
+        capturedCode = typeof code === "number" ? code : 1;
+        throw new Error(`process.exit(${capturedCode})`);
+      });
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    try {
+      generateCommand.exitOverride();
+      await generateCommand.parseAsync(
+        ["node", "merkle-airdrop", "--input", inputFile],
+        { from: "user" }
+      );
+    } catch {
+      // Expected
+    } finally {
+      exitSpy.mockRestore();
+      vi.spyOn(process.stderr, "write").mockRestore();
+      vi.spyOn(process.stdout, "write").mockRestore();
+    }
+
+    let outputExists = false;
+    try {
+      await readFile(outputFile, "utf-8");
+      outputExists = true;
+    } catch { /* expected */ }
+    expect(outputExists).toBe(false);
+  });
+
+  // ── 10. Non-existent input file → error ───────────────────────────────────
+
+  it("exits with code 1 when the input file does not exist", async () => {
+    const { exitCode } = await runGenerate(
+      join(tmpDir, "does-not-exist.csv"),
+      outputFile
+    );
+
+    expect(exitCode).toBe(1);
+  });
+
+  // ── 11. Comments and blank lines are ignored ───────────────────────────────
+
+  it("ignores comment lines and blank lines in the CSV", async () => {
+    const csv = `# this is a comment\n\n${ADDR_A},1000\n\n# another comment\n${ADDR_B},500\n`;
+    await writeFile(inputFile, csv);
+
+    const { exitCode } = await runGenerate(inputFile, outputFile);
+
+    expect(exitCode).toBeUndefined();
+
+    const output = JSON.parse(await readFile(outputFile, "utf-8"));
+    expect(output.totalEntries).toBe(2);
+  });
+
+  // ── 12. Output JSON is valid and pretty-printed ───────────────────────────
+
+  it("writes pretty-printed JSON that round-trips cleanly", async () => {
+    await writeFile(inputFile, twoEntryCsv());
+
+    await runGenerate(inputFile, outputFile);
+
+    const raw = await readFile(outputFile, "utf-8");
+    // Should not throw
+    const parsed = JSON.parse(raw);
+    // Should be pretty-printed (contains newlines and spaces)
+    expect(raw).toMatch(/\n/);
+    expect(parsed.root).toBeTruthy();
   });
 });

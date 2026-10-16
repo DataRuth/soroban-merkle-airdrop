@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/eogenyi23-creator/soroban-merkle-airdrop/blob/main/SECURITY.md
+    about: >
+      Please DO NOT open a public issue for security vulnerabilities.
+      Review our security policy and report privately using the instructions in SECURITY.md.

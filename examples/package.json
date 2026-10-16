@@ -1,0 +1,17 @@
+{
+  "name": "@soroban-merkle-airdrop/examples",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runnable examples for soroban-merkle-airdrop",
+  "scripts": {
+    "full-workflow": "ts-node --project tsconfig.json full-workflow.ts"
+  },
+  "dependencies": {
+    "@soroban-merkle-airdrop/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.0",
+    "ts-node": "10.9.2",
+    "typescript": "5.4.5"
+  }
+}

@@ -21,12 +21,21 @@ export { buildMerkleTree, leafHash, hashPair, verifyProof } from "./merkle.js";
 // ─── Contract client ─────────────────────────────────────────────────────────
 export { createAirdropClient } from "./client.js";
 
+// ─── Fetch utility ───────────────────────────────────────────────────────────
+export { fetchMerkleTree, validateMerkleTreeFile } from "./fetch.js";
+
 // ─── Types and network presets ───────────────────────────────────────────────
 export type {
   AirdropEntry,
   ClaimProof,
   MerkleTreeResult,
+  MerkleTreeFile,
   NetworkConfig,
   ClaimResult,
+  InitEvent,
+  ClaimedEvent,
+  ReclaimedEvent,
+  PausedEvent,
+  AirdropEvent,
 } from "./types.js";
-export { NETWORKS } from "./types.js";
+export { NETWORKS, AirdropError, AirdropContractError, RpcError } from "./types.js";

@@ -22,8 +22,34 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Check formatting
+        run: cargo fmt --check --manifest-path contracts/airdrop/Cargo.toml
+      - name: Run clippy
+        run: cargo clippy --manifest-path contracts/airdrop/Cargo.toml -- -D warnings
       - name: Run tests
         run: cargo test --manifest-path contracts/airdrop/Cargo.toml
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --version 0.31.2 --locked
+      - name: Generate coverage report
+        # Run tarpaulin against the rlib target (cdylib is excluded automatically).
+        # CI does NOT fail on low coverage — this is informational only initially.
+        # --out Xml  → cobertura XML for artifact upload
+        # --out Html → human-readable HTML report
+        # --output-dir → place all reports under coverage/
+        run: |
+          cargo tarpaulin \
+            --manifest-path contracts/airdrop/Cargo.toml \
+            --out Xml Html \
+            --output-dir coverage \
+            --skip-clean \
+            --timeout 120
+        continue-on-error: true
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: warn
       - name: Build WASM
         run: cargo build --manifest-path contracts/airdrop/Cargo.toml --target wasm32v1-none --release
 
@@ -38,18 +64,45 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: "9"
-      - name: Install & build SDK
-        run: |
-          pnpm install --no-frozen-lockfile
-          pnpm build
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "store=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.store }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Audit SDK dependencies
+        # Fail the build on high or critical vulnerabilities in sdk/.
+        # To suppress a known false-positive, add it to sdk/.npmrc:
+        #   audit-exceptions=<advisory-id>
+        # or document it in sdk/audit-exceptions.md with justification.
+        run: pnpm audit --audit-level=high
+        working-directory: sdk
+      - name: Build SDK
+        run: pnpm build
+        working-directory: sdk
+      - name: Lint SDK
+        run: pnpm lint
         working-directory: sdk
       - name: Test SDK
         run: pnpm test
         working-directory: sdk
-      - name: Install & build CLI
-        run: |
-          pnpm install --no-frozen-lockfile
-          pnpm build
+      - name: Audit CLI dependencies
+        # Fail the build on high or critical vulnerabilities in cli/.
+        # To suppress a known false-positive, add it to cli/.npmrc:
+        #   audit-exceptions=<advisory-id>
+        # or document it in cli/audit-exceptions.md with justification.
+        run: pnpm audit --audit-level=high
+        working-directory: cli
+      - name: Build CLI
+        run: pnpm build
+        working-directory: cli
+      - name: Lint CLI
+        run: pnpm lint
         working-directory: cli
       - name: Test CLI
         run: pnpm test
@@ -66,13 +119,26 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: "9"
-      - name: Install & build SDK
-        run: |
-          pnpm install --no-frozen-lockfile
-          pnpm build
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "store=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.store }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build SDK
+        run: pnpm build
         working-directory: sdk
-      - name: Install web
-        run: pnpm install --no-frozen-lockfile
+      - name: Audit web dependencies
+        # Fail the build on high or critical vulnerabilities in web/.
+        # To suppress a known false-positive, add it to web/.npmrc:
+        #   audit-exceptions=<advisory-id>
+        # or document it in web/audit-exceptions.md with justification.
+        run: pnpm audit --audit-level=high
         working-directory: web
       - name: Lint
         run: pnpm lint

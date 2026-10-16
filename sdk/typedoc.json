@@ -1,0 +1,17 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "name": "@soroban-merkle-airdrop/sdk",
+  "readme": "none",
+  "includeVersion": true,
+  "categorizeByGroup": true,
+  "navigationLinks": {
+    "GitHub": "https://github.com/eogenyi23-creator/soroban-merkle-airdrop"
+  },
+  "plugin": [],
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "sortEntryPoints": true,
+  "tsconfig": "tsconfig.json"
+}
