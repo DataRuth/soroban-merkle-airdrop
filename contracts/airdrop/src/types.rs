@@ -1,16 +1,6 @@
 //! Data types and storage keys for the Merkle airdrop contract.
 
-use soroban_sdk::{contracttype, contracterror, Address};
-
-/// A leaf in the Merkle tree: the claimant address and the amount they can claim.
-///
-/// Leaf hash = SHA-256(address_bytes ++ amount_bytes_big_endian)
-#[contracttype]
-#[derive(Clone, Debug)]
-pub struct AirdropEntry {
-    pub claimant: Address,
-    pub amount: i128,
-}
+use soroban_sdk::{contracterror, contracttype, Address};
 
 /// Persistent storage keys.
 #[contracttype]
@@ -29,6 +19,8 @@ pub enum DataKey {
     Active,
     /// Unix timestamp (seconds) after which `reclaim()` is permitted.
     Expiration,
+    /// Count of successful claims.
+    ClaimedCount,
 }
 
 /// Errors returned by the airdrop contract.
@@ -49,4 +41,20 @@ pub enum AirdropError {
     ZeroAmount = 6,
     /// `reclaim()` called before the expiration timestamp has been reached.
     NotYetExpired = 7,
+    /// `initialize()` called with an expiration timestamp that is already in
+    /// the past (i.e. `expiration <= env.ledger().timestamp()`).
+    ExpirationInPast = 8,
+}
+
+/// A single recipient's allocation inside a batch claim.
+///
+/// Supplied to `AirdropContract::batch_claim` as one vector of entries plus a
+/// parallel vector of Merkle proofs, so `proofs[i]` belongs to `entries[i]`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AirdropEntry {
+    /// Address receiving the tokens; must authorise the batch claim.
+    pub claimant: Address,
+    /// Tokens allocated to this claimant in the distribution tree.
+    pub amount: i128,
 }

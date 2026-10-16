@@ -5,21 +5,25 @@
 //!
 //! # Leaf construction
 //!
-//! A leaf is the SHA-256 hash of a pre-hashed address concatenated with the
-//! 16-byte big-endian encoding of the amount:
+//! A leaf is the SHA-256 hash of a pre-hashed contract address (domain
+//! separator), a pre-hashed claimant address, and the 16-byte big-endian
+//! encoding of the amount:
 //!
-//!   `SHA-256( SHA-256(address_strkey_utf8_bytes) ++ amount_be_bytes[16] )`
+//!   `SHA-256( SHA-256(contract_strkey_utf8_bytes) ++ SHA-256(claimant_strkey_utf8_bytes) ++ amount_be_bytes[16] )`
 //!
-//! The address is first encoded as its Stellar strkey string (e.g. `G...` for
-//! accounts, `C...` for contracts), then the UTF-8 bytes of that string are
-//! SHA-256 hashed to produce a fixed 32-byte value. This hash is then
-//! concatenated with the 16-byte big-endian i128 amount and SHA-256 hashed
-//! again to produce the leaf..
+//! The contract address is hashed first so that a proof valid on one
+//! deployment is not valid on a second deployment that shares the same root
+//! (cross-contract replay / same-root attack — see docs/replay-attack-analysis.md).
+//!
+//! Both the contract and the claimant are encoded as their Stellar strkey
+//! strings (e.g. `C...` / `G...`), then SHA-256 hashed.  That result is then
+//! concatenated with the 16-byte big-endian i128 amount and SHA-256'd again.
 //!
 //! The TypeScript SDK's `leafHash()` must match this exactly:
-//!   - Hash the strkey string bytes with SHA-256 (do NOT use raw decoded bytes).
+//!   - Hash the contract strkey string bytes with SHA-256 first.
+//!   - Hash the claimant strkey string bytes with SHA-256 second.
 //!   - Encode the amount as 16-byte big-endian (i128 → two 64-bit words).
-//!   - SHA-256 the concatenation.
+//!   - SHA-256 the concatenation of the three values above.
 //!
 //! # Node hashing
 //!
@@ -31,26 +35,36 @@
 
 use soroban_sdk::{Address, Bytes, BytesN, Env, Vec};
 
-/// Compute the leaf hash for a (claimant, amount) pair.
+/// Compute the leaf hash for a (claimant, amount) pair, bound to this contract.
 ///
-/// Leaf = `SHA-256( SHA-256(address_strkey_utf8_bytes) ++ amount_be_bytes[16] )`
+/// Leaf = `SHA-256( SHA-256(contract_strkey_utf8_bytes) ++ SHA-256(address_strkey_utf8_bytes) ++ amount_be_bytes[16] )`
+///
+/// The contract address is included as the first component so that a valid
+/// proof on one deployment cannot be replayed against a second deployment
+/// that shares the same Merkle root (domain separation).
 ///
 /// The address is hashed as its strkey UTF-8 string bytes (e.g. `G...` or
 /// `C...`), not as raw decoded bytes. The TypeScript SDK must match this.
-pub fn leaf_hash(env: &Env, claimant: &Address, amount: i128) -> BytesN<32> {
-    // Step 1: SHA-256 the strkey UTF-8 bytes of the address.
+pub fn leaf_hash(env: &Env, contract_id: &Address, claimant: &Address, amount: i128) -> BytesN<32> {
+    // Step 1: SHA-256 the strkey UTF-8 bytes of the *contract* address (domain separator).
+    let contract_str: soroban_sdk::String = contract_id.to_string();
+    let contract_str_bytes: Bytes = contract_str.to_bytes();
+    let contract_hash: BytesN<32> = env.crypto().sha256(&contract_str_bytes).into();
+
+    // Step 2: SHA-256 the strkey UTF-8 bytes of the claimant address.
     let addr_str: soroban_sdk::String = claimant.to_string();
     let addr_str_bytes: Bytes = addr_str.to_bytes();
     let addr_hash: BytesN<32> = env.crypto().sha256(&addr_str_bytes).into();
 
-    // Step 2: Concatenate addr_hash (32 bytes) with amount (16-byte big-endian i128).
+    // Step 3: Concatenate contract_hash (32 bytes) ++ addr_hash (32 bytes) ++ amount (16-byte big-endian i128).
     let mut data = Bytes::new(env);
+    data.append(&contract_hash.into());
     data.append(&addr_hash.into());
 
     let amount_b: Bytes = Bytes::from_array(env, &amount.to_be_bytes());
     data.append(&amount_b);
 
-    // Step 3: SHA-256 the concatenation to get the leaf.
+    // Step 4: SHA-256 the concatenation to get the leaf.
     env.crypto().sha256(&data).into()
 }
 
