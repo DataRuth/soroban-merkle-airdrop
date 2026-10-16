@@ -10,7 +10,7 @@
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "test": "vitest run",
-    "lint": "eslint src --ext .ts"
+    "lint": "pnpm exec eslint src --ext .ts"
   },
   "dependencies": {
     "@soroban-merkle-airdrop/sdk": "workspace:*",
@@ -24,6 +24,8 @@
     "@types/node": "20.14.0",
     "typescript": "5.4.5",
     "vitest": "1.6.0",
+    "eslint": "8.57.0",
+    "supports-color": "7.2.0",
     "@typescript-eslint/parser": "7.13.0",
     "@typescript-eslint/eslint-plugin": "7.13.0"
   },
