@@ -213,6 +213,81 @@ export function createAirdropClient(config: NetworkConfig) {
     }
   }
 
+  /**
+   * Set the airdrop active/inactive state (admin only).
+   *
+   * Builds, signs, and submits a `set_active` transaction.
+   * The `adminSecretKey` must belong to the address that was set as admin
+   * when the contract was initialized.
+   *
+   * @param active - `true` to unpause (resume) the airdrop; `false` to pause it.
+   * @param adminSecretKey - Admin's Stellar secret key (S…).
+   * @returns Object containing the submitted transaction hash.
+   * @throws {AirdropContractError} when the contract rejects (e.g. Unauthorized).
+   * @throws {RpcError} for network / submission failures.
+   *
+   * @example
+   * ```ts
+   * // Pause the airdrop
+   * const { txHash } = await client.setActive(false, adminSecretKey);
+   *
+   * // Resume it later
+   * await client.setActive(true, adminSecretKey);
+   * ```
+   */
+  async function setActive(
+    active: boolean,
+    adminSecretKey: string
+  ): Promise<{ txHash: string }> {
+    const keypair = Keypair.fromSecret(adminSecretKey);
+    const sourceAccount = await server.getAccount(keypair.publicKey());
+
+    const tx = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: config.networkPassphrase,
+    })
+      .addOperation(
+        contractInst.call(
+          "set_active",
+          nativeToScVal(active, { type: "bool" })
+        )
+      )
+      .setTimeout(30)
+      .build();
+
+    const simResult = await server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(simResult)) {
+      const contractCode = parseContractErrorCode(simResult.error);
+      if (contractCode !== null) {
+        throw new AirdropContractError(contractCode);
+      }
+      throw new RpcError(`Simulation failed: ${simResult.error}`);
+    }
+
+    const preparedTx = rpc.assembleTransaction(tx, simResult).build();
+    preparedTx.sign(keypair);
+
+    const sendResult = await server.sendTransaction(preparedTx);
+    if (sendResult.status === "ERROR") {
+      throw new RpcError(
+        `Transaction submission failed`,
+        sendResult.errorResult?.toXDR("base64")
+      );
+    }
+
+    const txHash = sendResult.hash;
+    while (true) {
+      await sleep(2000);
+      const poll = await server.getTransaction(txHash);
+      if (poll.status === "SUCCESS") {
+        return { txHash };
+      }
+      if (poll.status === "FAILED") {
+        throw new RpcError(`Transaction failed on-chain: ${txHash}`);
+      }
+    }
+  }
+
   async function simulateRead(operation: xdr.Operation): Promise<xdr.ScVal> {
     const dummy = Keypair.random();
     const account = new Account(dummy.publicKey(), "0");
@@ -235,7 +310,7 @@ export function createAirdropClient(config: NetworkConfig) {
     return new Promise((r) => setTimeout(r, ms));
   }
 
-  return { isClaimed, isActive, merkleRoot, totalDeposited, claim, buildClaimTransaction, submitSignedTransaction };
+  return { isClaimed, isActive, merkleRoot, totalDeposited, claim, buildClaimTransaction, submitSignedTransaction, setActive };
 }
 
 /**
